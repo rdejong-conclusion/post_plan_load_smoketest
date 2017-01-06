@@ -1,0 +1,106 @@
+require 'json'
+require 'date'
+require 'selenium-webdriver'
+require "rspec"
+require 'rspec/retry'
+require 'rspec_junit_formatter'
+require 'rspec/wait'
+include RSpec::Expectations
+# include RSpec::Wait
+
+describe "PostPlanSmoketestRubyWebdriver" do
+
+  before(:each) do
+    Selenium::WebDriver::Firefox.path = "/root/firefox/firefox"
+    $target_host = ENV["target_host"]
+    $target_user = ENV["target_user"]
+    $target_pass = ENV["target_pass"]
+    @driver = Selenium::WebDriver.for(:firefox, :profile => "firefox-default")
+    @base_url = "https://#{$target_host}:14051/HARM/controller"
+    @accept_next_alert = true
+    @driver.manage.timeouts.implicit_wait = 600
+    @verification_errors = []
+    RSpec.configure do |config|
+      config.expect_with :rspec do |c|
+        c.syntax = [:should, :expect]
+      end
+      config.verbose_retry = true
+      config.default_retry_count = 5
+      config.wait_timeout = 600 # seconds
+      config.exceptions_to_retry = [Net::ReadTimeout]
+    end
+  end
+  
+  after(:each) do
+    @driver.quit
+    @verification_errors.should == []
+  end
+  
+  it "test_post_plan_smoketest_ruby_webdriver" do
+    @driver.get(@base_url)
+    puts @driver.title
+    puts "Logging in"
+    @driver.find_element(:name, "username").clear
+    @driver.find_element(:name, "username").send_keys $target_user
+    @driver.find_element(:name, "userpassword").clear
+    @driver.find_element(:name, "userpassword").send_keys $target_pass
+    @driver.find_element(:css, "input[type=\"submit\"]").click
+    @driver.find_element(:link, "Processen").click
+    puts "Generating plan"
+    @driver.find_element(:link, "Genereren planning").click
+    puts "Firing off command to start generating plan"
+    # Define current dd-mm-YYYY for plan generation
+    current_date = DateTime.now().strftime("%d-%m-%Y")
+    # Generating plan for today
+    @driver.find_element(:name, "startDate").send_keys "#{current_date}"
+    @driver.find_element(:name, "endDate").send_keys "#{current_date}"
+    @driver.find_element(:css, "input[type=\"submit\"]").click
+    @driver.find_element(:link, "Voortgang processen").click
+    # We loop over the subsequent steps we expect to appear as defined in plan_steps.lst.
+    # Waittime until fail is defined in the 'before(:each)' block
+    File.open("plan_steps.lst").each do |plan_step|
+      step = plan_step.delete!("\n")
+      # Add current_date to string to swap % placeholders (see plan_steps.lst)
+      step_string = step % { :current_date => current_date }
+      puts "Checking on step : #{step_string}"
+      @driver.find_element(:link, "Voortgang processen").click
+      # expect(@driver.find_element(:tag_name => "body").text).to include("#{step_string}")
+      wait_for(@driver.find_element(:tag_name => "body").text).to include("#{step_string}")
+      puts "Successfully checked step #{step_string}"
+      sleep(10)
+    end
+  end
+  
+  def element_present?(how, what)
+    @driver.find_element(how, what)
+    true
+  rescue Selenium::WebDriver::Error::NoSuchElementError
+    false
+  end
+  
+  def alert_present?()
+    @driver.switch_to.alert
+    true
+  rescue Selenium::WebDriver::Error::NoAlertPresentError
+    false
+  end
+  
+  def verify(&blk)
+    yield
+  rescue Test::Unit::AssertionFailedError => ex
+    @verification_errors << ex
+  end
+  
+  def close_alert_and_get_its_text(how, what)
+    alert = @driver.switch_to().alert()
+    alert_text = alert.text
+    if (@accept_next_alert) then
+      alert.accept()
+    else
+      alert.dismiss()
+    end
+    alert_text
+  ensure
+    @accept_next_alert = true
+  end
+end
