@@ -17,4 +17,4 @@ ADD post_plan_smoketest_ruby_webdriver /root/selenium_wd_tests
 ADD plan_steps.lst /root/selenium_wd_tests
 RUN chmod +x /etc/init.d/xvfb 
 RUN update-rc.d xvfb defaults
-CMD (service xvfb start; export DISPLAY=":10" PATH="$PATH:/root/firefox/";cd /root/selenium_wd_tests;target_host=$target_host target_user=$target_user target_pass=$target_pass rspec post_plan_smoketest_ruby_webdriver)
+CMD (service xvfb start; export DISPLAY=":10" PATH="$PATH:/root/firefox/";cd /root/selenium_wd_tests;target_host=$target_host target_user=$target_user target_pass=$target_pass rspec post_plan_load_smoketest_ruby_webdriver)
